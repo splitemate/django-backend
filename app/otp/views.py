@@ -10,6 +10,7 @@ from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from otp.serializers import OTPValidateSerializer, OTPRequestSerializer
 from otp.exceptions import OTPCreationLimitExceeded
+from transaction.models import UserBalance
 
 
 class OTPRequestView(APIView):
@@ -71,7 +72,14 @@ class OTPValidateView(APIView):
                             responseDict.update({'token': token, 'uid': uid})
                         elif reason == "EV":
                             token = Helper.get_tokens_for_user(user=user)
-                            responseDict.update({'id': str(user.id), 'email': user.email, 'name': user.name, 'tokens': token})
+                            responseDict.update({
+                                'id': str(user.id),
+                                'name': user.name,
+                                'email': user.email,
+                                'image_url': user.image_url,
+                                'tokens': token,
+                                'balance': UserBalance.get_user_balance(user.id)
+                            })
                             user.is_email_verified = True
                             user.save()
                         return Response(responseDict, status=status.HTTP_200_OK)
