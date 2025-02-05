@@ -13,6 +13,7 @@ class GroupType(models.TextChoices):
 
 
 class Group(models.Model):
+    is_active = models.BooleanField(default=True)
     group_name = models.CharField(max_length=100, verbose_name='Name')
     description = models.CharField(max_length=255, blank=True, null=True, verbose_name='Description')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Created By') 
