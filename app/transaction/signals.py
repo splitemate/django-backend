@@ -3,6 +3,7 @@ from django.dispatch import receiver
 from transaction.models import Transaction, TransactionParticipant, UserBalance
 from activity.models import Activity, ActivityType
 
+
 @receiver(post_delete, sender=Transaction)
 def handle_transaction_deletion(sender, instance, **kwargs):
     """
@@ -56,4 +57,3 @@ def handle_transaction_deletion(sender, instance, **kwargs):
             activity_type=ActivityType.DELETED_TRANSACTION,
             comments={"message": f"Transaction {instance.id} was deleted and balances were updated."},
         )
-

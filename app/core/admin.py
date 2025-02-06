@@ -1,15 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
-from otp.models import OTP
-from group.models import Group, GroupParticipant
-from transaction.models import Transaction, TransactionParticipant, UserBalance
+from group.models import GroupParticipant
 from core import models
 
 
 class GroupParticipantInlineForUser(admin.TabularInline):
     model = GroupParticipant
-    extra = 0 
+    extra = 0
     fields = ('group', 'role')
     autocomplete_fields = ['group']
 
@@ -18,9 +16,9 @@ class UserAdmin(BaseUserAdmin):
     """Define the admin pages for users."""
     ordering = ['id']
     list_display = ['email', 'name']
-    
+
     inlines = [GroupParticipantInlineForUser]
-    
+
     fieldsets = (
         (None, {'fields': ('name', 'email', 'password', 'invite_token')}),
         (_('Permissions'), {
@@ -50,5 +48,6 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
     filter_horizontal = ('friends',)
+
 
 admin.site.register(models.User, UserAdmin)

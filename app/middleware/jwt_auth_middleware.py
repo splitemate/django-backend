@@ -16,8 +16,9 @@ def get_user(token):
         return User.objects.get(id=user_id)
     except User.DoesNotExist:
         return AnonymousUser()
-    except Exception as e:
+    except Exception:
         return AnonymousUser()
+
 
 class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):

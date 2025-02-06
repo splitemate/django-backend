@@ -9,6 +9,7 @@ from transaction.models import Transaction
 from transaction.serializers import AddTransactionSerializer, ModifyTransactionSerializer
 from app.helper import Helper
 
+
 class TransactionConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
@@ -22,7 +23,7 @@ class TransactionConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         if self.scope["user"].is_authenticated:
             await self.channel_layer.group_discard(self.user_group_name, self.channel_name)
-    
+
     async def transaction_message(self, event):
         await self.send(text_data=json.dumps({"message": event}))
 
@@ -59,7 +60,7 @@ class TransactionConsumer(AsyncWebsocketConsumer):
             if response_key:
                 return Helper.format_error_response(response_key)
             else:
-                return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(e)})
+                return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(ve)})
         except Exception as e:
             return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(e)})
 
@@ -73,16 +74,16 @@ class TransactionConsumer(AsyncWebsocketConsumer):
                 return Helper.format_error_response("SUCCESS_TRANSACTION_MODIFIED")
             return serializer.errors
         except Transaction.DoesNotExist:
-           return Helper.format_error_response("ERR_TRANSACTION_NOT_FOUND")
+            return Helper.format_error_response("ERR_TRANSACTION_NOT_FOUND")
         except ValidationError as ve:
             error_details = ve.detail
             response_key = error_details.get('response_key', False)
             if response_key:
                 return Helper.format_error_response(response_key)
             else:
-                return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(e)})
+                return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(ve)})
         except Exception as e:
             return Helper.format_error_response("ERR_SOMETHING_WENT_WRONG", {"error": str(e)})
-            
+
     async def send_response(self, response):
         await self.send(text_data=json.dumps(response))

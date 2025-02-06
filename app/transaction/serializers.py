@@ -3,7 +3,6 @@ Serializers for Transaction API View
 """
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from django.core.exceptions import ValidationError
 from transaction.models import Transaction, TransactionParticipant, UserBalance
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -71,7 +70,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             initiator_ids = [key[0] for key in balance_changes]
             participant_ids = [key[1] for key in balance_changes]
-            
+
             existing_balances = {
                 (balance.initiator.id, balance.participant.id): balance
                 for balance in UserBalance.objects.filter(initiator_id__in=initiator_ids, participant_id__in=participant_ids)
@@ -130,7 +129,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
 
         if not split_details:
             Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
-            
+
         user = self.context.get('user') or getattr(self.context.get('request'), 'user', None)
         user_ids = [user.id] if user else []
 
@@ -142,7 +141,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
                 amount = float(split['amount'])
                 if amount <= 0:
                     raise ValueError
-            except (KeyError, ValueError):           
+            except (KeyError, ValueError):
                 Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
             user_ids.append(user)
             total_split_amount += amount
@@ -155,13 +154,13 @@ class AddTransactionSerializer(serializers.ModelSerializer):
 
         if is_group and not group:
             Helper.raise_validation_error("ERR_GROUP_REQUIRED")
-        
+
         if is_group and group:
             group_participants_ids = set(group.participants.values_list('id', flat=True))
             if not set(user_ids).issubset(group_participants_ids):
                 Helper.raise_validation_error("ERR_NON_GROUP_MEMBER")
         return data
-    
+
     def create(self, validated_data):
         payer = validated_data['payer']
         group = validated_data.get('group', None)
@@ -201,7 +200,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
         filtered_records = self.bulk_update_user_balance(balance_changes)
         ledger_dict = Helper.pre_process_user_balance(filtered_records=filtered_records)
 
-        Helper.broadcast_transaction_message(model='transaction',method='create',transaction_obj=transaction, exclude_user=initial_user, ledger_dict=ledger_dict, split_details=split_details)
+        Helper.broadcast_transaction_message(model='transaction', method='create', transaction_obj=transaction, exclude_user=initial_user, ledger_dict=ledger_dict, split_details=split_details)
         return transaction
 
 
@@ -223,10 +222,10 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         if not split_details:
             Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
-        
+
         user = self.context.get('user') or getattr(self.context.get('request'), 'user', None)
         user_ids = [user.id] if user else []
-        
+
         total_split_amount = 0
 
         for split in split_details:
@@ -235,7 +234,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 amount = float(split['amount'])
                 if amount <= 0:
                     raise ValueError
-            except (KeyError, ValueError):           
+            except (KeyError, ValueError):
                 Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
             user_ids.append(user)
             total_split_amount += amount
@@ -248,7 +247,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         if is_group and not group:
             Helper.raise_validation_error("ERR_GROUP_REQUIRED")
-        
+
         if is_group and group:
             group_participants_ids = set(group.participants.values_list('id', flat=True))
             if not set(user_ids).issubset(group_participants_ids):
@@ -286,7 +285,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                     'total_amount_received': 0,
                     'transaction_count': 0,
                 }
-            
+
             balance_change = amount_owed if is_initiator_payer else -amount_owed
             total_received_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
             total_paid_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
@@ -299,7 +298,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 balance_changes[key][total_received_key] += amount_owed
 
             if split.get('remove_entry', False):
-                balance_changes[key]['transaction_count'] -= 1 
+                balance_changes[key]['transaction_count'] -= 1
 
     def bulk_update_user_balance(self, balance_changes):
         """Update the UserBalance in bulk based on the accumulated balance changes."""
@@ -352,7 +351,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 updated_records = updates
             else:
                 updated_records = []
-                
+
             all_records = list(chain(created_records, updated_records))
             filtered_records = [record for record in all_records if record.initiator != record.participant]
             return filtered_records
@@ -364,7 +363,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         description = validated_data.get('description', instance.description)
         transaction_type = validated_data.get('transaction_type', instance.transaction_type)
         transaction_date = validated_data.get('transaction_date', instance.transaction_date)
-        
+
         split_details = validated_data.get('split_details', [])
         split_details = Helper.transform_split_data(split_details)
 
@@ -384,7 +383,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             old_split_details_dict[detail['user_id']] = {'amount': detail['amount_owed']}
             old_split_details.append({'user': detail['user_id'], 'amount': detail['amount_owed']})
 
-        excluded_ids = list(set(user.get('user') for user in old_split_details) - set(user.get('user') for user in split_details)) 
+        excluded_ids = list(set(user.get('user') for user in old_split_details) - set(user.get('user') for user in split_details))
 
         instance.payer = payer
         instance.group = group
@@ -423,7 +422,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 old_amount = data.get('amount')
                 new_amount = user.get('amount')
                 data['amount'] = old_amount - new_amount if old_amount != new_amount else 0
-        
+
         for user in excluded_ids:
             amount = old_split_details_dict.get(user, {}).get('amount', 0)
             split_details.append({'user': user, 'amount': amount * -1, 'remove_entry': True})

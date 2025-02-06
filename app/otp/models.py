@@ -14,13 +14,14 @@ class OTPRequestReason(models.TextChoices):
     EMAIL_VERIFICATION = 'EV', 'Email Verification'
     PASSWORD_RESET = 'PR', 'Password Reset'
 
+
 class OTP(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='User')
     code = models.CharField(max_length=4, verbose_name='OTP Code')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
     expires_at = models.DateTimeField(verbose_name='Expires At')
     reason = models.CharField(max_length=2, choices=OTPRequestReason.choices, verbose_name='Reason')
-    is_used = models.BooleanField(default=False) 
+    is_used = models.BooleanField(default=False)
 
     def is_expired(self):
         return timezone.now() >= self.expires_at
@@ -53,7 +54,7 @@ class OTP(models.Model):
         last_hour = timezone.now() - timedelta(hours=1)
         otp_count = OTP.objects.filter(user=user, created_at__gte=last_hour).count()
         return otp_count < OTP.get_hourly_limit()
-    
+
     @staticmethod
     def queue_send_otp_email(user, otp):
         subject = 'Verification Code for Splitemate'
@@ -82,11 +83,11 @@ class OTP(models.Model):
         otp = OTP.objects.create(
             user=user,
             reason=reason,
-            code=code, 
+            code=code,
             expires_at=expires_at
         )
         OTP.queue_send_otp_email(user, otp)
         return otp
-    
+
     def __str__(self):
         return self.code

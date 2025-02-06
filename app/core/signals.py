@@ -5,6 +5,7 @@ from activity.models import Activity, ActivityType
 
 User = get_user_model()
 
+
 @receiver(m2m_changed, sender=User.friends.through)
 def track_friend_changes(sender, instance, action, reverse, model, pk_set, **kwargs):
     """

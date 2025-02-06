@@ -2,7 +2,8 @@ from django.db import models
 from django.conf import settings
 from group.models import Group
 from django.utils import timezone
-from django.db.models import Sum, Q
+from django.db.models import Sum
+from core.models import ActiveManager
 
 
 class TransactionTypes(models.TextChoices):
@@ -22,15 +23,20 @@ class Transaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='transactions_created', on_delete=models.CASCADE)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    objects = ActiveManager()
+    all_objects = models.Manager()
+
     def delete(self, *args, **kwargs):
         """Soft delete instead of actual delete."""
         self.is_active = False
+        TransactionParticipant.all_objects.filter(transaction=self).update(is_active=False)
         self.save()
-        
+
     def restore(self):
         """Restore a soft-deleted group."""
         self.is_active = True
+        TransactionParticipant.all_objects.filter(transaction=self).update(is_active=True)
         self.save()
 
     def save(self, *args, **kwargs):
@@ -45,16 +51,20 @@ class Transaction(models.Model):
 
 
 class TransactionParticipant(models.Model):
+    is_active = models.BooleanField(default=True)
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, db_index=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, db_index=True)
     amount_owed = models.DecimalField(max_digits=10, decimal_places=2)
+
+    objects = ActiveManager()
+    all_objects = models.Manager()
 
     def __str__(self):
         return f'{self.user} owes {self.amount_owed} in transaction {self.transaction}'
 
 
 class UserBalance(models.Model):
-    initiator  = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='balances_as_user', on_delete=models.CASCADE, db_index=True)
+    initiator = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='balances_as_user', on_delete=models.CASCADE, db_index=True)
     participant = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='balances_as_friend', on_delete=models.CASCADE, db_index=True)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
@@ -69,7 +79,7 @@ class UserBalance(models.Model):
 
     def __str__(self):
         return f"Balance between {self.initiator} and {self.participant}: {self.balance}"
-    
+
     @classmethod
     def get_user_balance(cls, user_id) -> dict:
         """

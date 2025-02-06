@@ -8,6 +8,7 @@ from app.response_codes import RESPONSE_CODES
 from rest_framework.exceptions import ValidationError
 from transaction.models import UserBalance
 
+
 class Helper:
 
     @staticmethod
@@ -20,18 +21,18 @@ class Helper:
             "refresh": str(refresh),
             "access": str(refresh.access_token),
         }
-    
+
     @staticmethod
     def transform_split_data(data) -> list:
         transformed_data = []
-        
+
         for item in data:
             transformed_item = {
-                'user': int(item['user']), 
+                'user': int(item['user']),
                 'amount': Decimal(item['amount']),
             }
             transformed_data.append(transformed_item)
-        
+
         return transformed_data
 
     @staticmethod
@@ -69,7 +70,7 @@ class Helper:
             sanitized_extra_data = {key: str(value) for key, value in extra_data.items()}
             error_data.update(sanitized_extra_data)
         return error_data
-    
+
     @staticmethod
     def get_group_data(group):
         """
@@ -88,7 +89,7 @@ class Helper:
         data['updated_at'] = group.updated_at.isoformat()
         data.pop('participants', None)
         return data
-    
+
     @staticmethod
     def pre_process_user_balance(filtered_records) -> dict:
         """
@@ -99,11 +100,11 @@ class Helper:
             payer_id (str): Payer Id of transaction
 
         Returns:
-            dict: A dictionary where each user ID is a key and the value is another list of dictonary 
+            dict: A dictionary where each user ID is a key and the value is another list of dictonary
                 containing their balance , id, name, email.
 
         Purpose:
-            This method is used to compute and set user balances based on transactions, 
+            This method is used to compute and set user balances based on transactions,
             ensuring each user's role in the transaction is clearly defined.
             Assist to create Ledger structure for app.
         """
@@ -126,7 +127,7 @@ class Helper:
                 'balance': float(balance),
                 'image_url': participant.image_url,
             })
-            
+
             if participant_id not in user_balances:
                 user_balances[participant_id] = []
             user_balances[participant_id].append({
@@ -138,7 +139,7 @@ class Helper:
             })
 
         return user_balances
-    
+
     def convert_to_transaction_dict(transaction_obj, split_details, detail_split_details) -> dict:
         """
         Converts a transaction object into a dictionary representation.
@@ -180,8 +181,7 @@ class Helper:
         data['created_at'] = transaction_obj.created_at.isoformat()
         data['updated_at'] = transaction_obj.updated_at.isoformat()
         return data, detail_split_details_copy
-    
-        
+
     @staticmethod
     def broadcast_transaction_message(model, method, transaction_obj, exclude_user, ledger_dict, split_details):
         """
@@ -196,7 +196,7 @@ class Helper:
         """
         payer_id = str(transaction_obj.payer.id)
         detail_split_details = ledger_dict.get(payer_id)
-        transaction_dict, detail_split_details_copy = Helper.convert_to_transaction_dict(transaction_obj=transaction_obj, split_details=split_details,detail_split_details=detail_split_details)
+        transaction_dict, detail_split_details_copy = Helper.convert_to_transaction_dict(transaction_obj=transaction_obj, split_details=split_details, detail_split_details=detail_split_details)
         exclude_user_id = str(exclude_user.id) if exclude_user else None
         exclude_user_id_set = {exclude_user_id} if exclude_user_id else set()
         group_details = {}
@@ -215,7 +215,7 @@ class Helper:
             user_total_balance = UserBalance.get_user_balance(user_id)
 
             data = {
-                **transaction_dict, 
+                **transaction_dict,
                 'method': method,
                 'split_details': detail_split_details_copy,
                 'ledger_balance': ledgers,
@@ -233,4 +233,3 @@ class Helper:
                 f"user_{user_id}",
                 final_data
             )
-        

@@ -27,17 +27,17 @@ class CreateUserView(APIView):
     """Create a new user in system"""
 
     renderer_classes = [UserRenderer]
-        
+
     def post(self, request):
         serializer = UserRegisterSerializers(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             try:
                 OTP.create_or_resend_otp(user, OTPRequestReason.EMAIL_VERIFICATION)
-            except:
+            except Exception:
                 return Response({"message": "Unable to send OTP"}, status=status.HTTP_400_BAD_REQUEST)
             data = {
-                "id": str(user.id),          
+                "id": str(user.id),
                 "name": user.name,
                 "email": user.email,
                 "image_url": user.image_url,
@@ -46,9 +46,10 @@ class CreateUserView(APIView):
             return Response({"message": "Registration successful", "user_data": data}, status=status.HTTP_201_CREATED)
         else:
             if "email" in serializer.errors:
-                return Response(serializer.errors,status=status.HTTP_409_CONFLICT)
+                return Response(serializer.errors, status=status.HTTP_409_CONFLICT)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserLoginView(APIView):
     """Login for existing users"""
@@ -75,8 +76,8 @@ class UserLoginView(APIView):
                 if not user.is_email_verified:
                     try:
                         OTP.create_or_resend_otp(user, OTPRequestReason.EMAIL_VERIFICATION)
-                    except:
-                        return Response({message: "OTP Limit Exceed"},status=status.HTTP_400_BAD_REQUEST)
+                    except Exception:
+                        return Response({message: "OTP Limit Exceed"}, status=status.HTTP_400_BAD_REQUEST)
                     status_code = status.HTTP_403_FORBIDDEN
                     message = "Email is not verified yet"
                     token = ""
@@ -89,11 +90,10 @@ class UserLoginView(APIView):
                     {"error": ["Email or Password is not valid"]},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
-            
+
 
 class ContinueWithGoogle(APIView):
     """ Continue with Google APIs """
-    
     renderer_classes = [UserRenderer]
 
     def post(self, requests, format=None):
@@ -108,8 +108,8 @@ class ContinueWithGoogle(APIView):
                     email=email,
                     defaults={
                         'name': name,
-                        'is_email_verified' : True,
-                        'user_source' : source
+                        'is_email_verified': True,
+                        'user_source': source
                     }
             )
 
@@ -129,8 +129,6 @@ class ContinueWithGoogle(APIView):
                 }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 
 class UserProfileView(APIView):
@@ -176,9 +174,9 @@ class UserForgotPassword(APIView):
                     {"message": "OTP is send to registered email"},
                     status=status.HTTP_200_OK,
                 )
-        except Http404 as e:
+        except Http404:
             return Response({"error": "user not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
+        except Exception:
             return Response({"error": "Something went wrong. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -195,8 +193,8 @@ class UserResetPassword(APIView):
                 status=status.HTTP_200_OK,
             )
         else:
-            return Response(serializer.errors, status= status.HTTP_401_UNAUTHORIZED)
-        
+            return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
 
 class AddFriend(APIView):
     """Create connectrion between 2 friends"""
@@ -214,7 +212,6 @@ class AddFriend(APIView):
         user = request.user
         if user == friend:
             return Response({'error': 'You cannot add yourself as a friend.'}, status=status.HTTP_400_BAD_REQUEST)
-        
         user.friends.add(friend)
 
         return Response({'message': 'Friend added successfully.'}, status=status.HTTP_200_OK)

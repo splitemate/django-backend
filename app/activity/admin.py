@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Activity, ActivityType
+from .models import Activity
+
 
 @admin.register(Activity)
 class ActivityAdmin(admin.ModelAdmin):
@@ -34,4 +35,3 @@ class ActivityAdmin(admin.ModelAdmin):
 
     readonly_fields = ("created_date",)
     filter_horizontal = ("related_users_ids",)
-

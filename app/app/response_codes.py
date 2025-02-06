@@ -1,6 +1,6 @@
 RESPONSE_CODES = {
 
-    "ERR_SOMETHING_WENT_WRONG":{
+    "ERR_SOMETHING_WENT_WRONG": {
         "code": "E0000",
         "message": "Something went wrong."
     },

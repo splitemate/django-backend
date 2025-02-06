@@ -1,20 +1,23 @@
 from django.db import models
 from django.conf import settings
-from django.contrib.postgres.fields import JSONField
 from group.models import Group
 from transaction.models import Transaction
+
 
 class ActivityType(models.TextChoices):
     ADDED_YOU_AS_FRIEND = "added_you_as_friend", "Added you as a Friend"
     REMOVED_YOU_AS_FRIEND = "removed_you_as_friend", "Removed you as a Friend"
     GROUP_CREATED = "group_created", "Group Created"
     GROUP_DELETED = "group_deleted", "Group Deleted"
+    GROUP_RESTORED = "group_restored", "Group Restored"
     ADDED_TO_GROUP = "added_to_group", "Added to Group"
     REMOVED_FROM_GROUP = "removed_from_group", "Removde from Group"
     ADDED_TRANSACTION = "added_transaction", "Added a Transaction"
     MODIFIED_TRANSACTION = "modified_transaction", "Modified a Transaction"
     DELETED_TRANSACTION = "deleted_transaction", "Deleted a Transaction"
+    RESTORED_TRANSACTION = "restored_transaction", "Restored a Transaction"
     SETTLED_AMOUNT = "settled_amount", "Settled the Amount"
+
 
 class Activity(models.Model):
     user_id = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities")
@@ -36,7 +39,7 @@ class Activity(models.Model):
 
         if "amount" in old_data and "amount" in new_data and old_data["amount"] != new_data["amount"]:
             messages.append(f"Amount changed from {old_data['amount']} to {new_data['amount']}.")
-            
+
         if "payer" in old_data and "payer" in new_data and old_data["payer"] != new_data["payer"]:
             messages.append(f"Payer changed from User {old_data['payer']} to User {new_data['payer']}.")
 
@@ -53,7 +56,7 @@ class Activity(models.Model):
                 messages.append(f"Participants added: {', '.join(map(str, added))}.")
 
         return " ".join(messages)
-    
+
     class Meta:
         ordering = ["-created_date"]
 

@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from core.models import ActiveManager
 
 
 class GroupType(models.TextChoices):
@@ -16,16 +17,29 @@ class Group(models.Model):
     is_active = models.BooleanField(default=True)
     group_name = models.CharField(max_length=100, verbose_name='Name')
     description = models.CharField(max_length=255, blank=True, null=True, verbose_name='Description')
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Created By') 
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Created By')
     group_type = models.CharField(choices=GroupType.choices, verbose_name='Group Type')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, through='GroupParticipant', related_name='groups_participated')
 
+    objects = ActiveManager()
+    all_objects = models.Manager()
+
+    def delete(self, *args, **kwargs):
+        """Soft delete instead of actual delete"""
+        self.is_active = False
+        self.save()
+
+    def restore(self):
+        """Restore a soft-deleted group"""
+        self.is_active = True
+        self.save()
+
     def __str__(self):
         return self.group_name
-    
+
 
 class GroupRole(models.TextChoices):
     ADMIN = 'admin', 'Admin'

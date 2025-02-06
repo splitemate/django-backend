@@ -14,6 +14,12 @@ from django.contrib.auth.models import (
 )
 
 
+class ActiveManager(models.Manager):
+    def get_queryset(self):
+        """Return only active records (soft delete enabled)"""
+        return super().get_queryset().filter(is_active=True)
+
+
 class UserSources(models.TextChoices):
     STANDARD = 'standard', 'Standard'
     GOOGLE = 'google', 'Google'
@@ -66,7 +72,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     friends = models.ManyToManyField('self', symmetrical=True, blank=True, help_text="Fiend list of user")
     invite_token = models.CharField(max_length=10, null=True, unique=True, help_text="Token to add friend with other users")
     user_source = models.CharField(
-        max_length=10, choices=UserSources.choices, default='standard', 
+        max_length=10, choices=UserSources.choices, default='standard',
         verbose_name="User Source", help_text="Indicates the source of the user registration (e.g., 'google')."
     )
     is_email_verified = models.BooleanField(
@@ -74,7 +80,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text="Indicates whether the user has verified their email."
     )
     image_url = models.URLField(max_length=500, blank=True, null=False, default="")
-
 
     objects = UserManager()
 

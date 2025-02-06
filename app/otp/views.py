@@ -37,10 +37,9 @@ class OTPRequestView(APIView):
                 return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
             except OTPCreationLimitExceeded:
                 return Response({'error': 'OTP request limit reached. Please try again later.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            except Exception as e:
+            except Exception:
                 return Response({'error': 'Something went wrong.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class OTPValidateView(APIView):

@@ -26,7 +26,7 @@ class AddTransactionView(APIView):
                 'transaction_id': transaction.id
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
 
 class ModifyTransactionView(APIView):
     """ Modify existing transaction of splitemate """
