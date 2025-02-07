@@ -22,8 +22,8 @@ class ActivityType(models.TextChoices):
 class Activity(models.Model):
     user_id = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities")
     related_users_ids = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="related_activities", blank=True)
-    group_id = models.ForeignKey(Group, on_delete=models.SET_NULL, null=True, blank=True)
-    transaction_id = models.ForeignKey(Transaction, on_delete=models.SET_NULL, null=True, blank=True)
+    group_id = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
+    transaction_id = models.ForeignKey(Transaction, on_delete=models.CASCADE, null=True, blank=True)
     activity_type = models.CharField(max_length=50, choices=ActivityType.choices)
     comments = models.JSONField(blank=True, null=True)
     created_date = models.DateTimeField(auto_now_add=True)

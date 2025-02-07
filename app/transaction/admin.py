@@ -5,7 +5,7 @@ from transaction.models import Transaction, TransactionParticipant, UserBalance
 class TransactionParticipantInline(admin.TabularInline):
     model = TransactionParticipant
     extra = 1
-    fields = ('user', 'amount_owed',)
+    fields = ('user', 'amount_owed', 'is_transaction_sattled')
 
 
 @admin.register(Transaction)
@@ -16,6 +16,7 @@ class TransactionAdmin(admin.ModelAdmin):
     inlines = [TransactionParticipantInline]
     date_hierarchy = 'transaction_date'
     readonly_fields = ('created_by', 'created_at', 'updated_at')
+    actions = ["soft_delete_transactions", "restore_transactions"]
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:
@@ -31,7 +32,7 @@ class TransactionAdmin(admin.ModelAdmin):
         for transaction in queryset:
             transaction.restore()
 
-    def delete_queryset(self, request, queryset):
+    def soft_delete_transactions(self, request, queryset):
         """Override bulk delete action to perform soft delete"""
         for obj in queryset:
             obj.delete()
@@ -39,7 +40,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 @admin.register(TransactionParticipant)
 class TransactionParticipantAdmin(admin.ModelAdmin):
-    list_display = ('transaction', 'user', 'amount_owed', 'is_active')
+    list_display = ('transaction', 'user', 'amount_owed', 'is_active', 'is_transaction_sattled')
     search_fields = ('user__username', 'transaction__description')
 
     def get_queryset(self, request):

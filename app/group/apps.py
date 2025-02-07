@@ -6,4 +6,4 @@ class UserConfig(AppConfig):
     name = 'group'
 
     def ready(self):
-        import group.signals # noqa
+        import group.signals  # noqa

@@ -6,4 +6,4 @@ class UserConfig(AppConfig):
     name = 'transaction'
 
     def ready(self):
-        import transaction.signals # noqa
+        import transaction.signals  # noqa

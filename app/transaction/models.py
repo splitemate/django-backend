@@ -14,7 +14,7 @@ class TransactionTypes(models.TextChoices):
 class Transaction(models.Model):
     is_active = models.BooleanField(default=True)
     payer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, db_index=True)
-    group = models.ForeignKey(Group, on_delete=models.SET_NULL, null=True, blank=True, db_index=True)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     split_count = models.PositiveIntegerField()
     description = models.CharField(max_length=255, blank=True, null=True)
@@ -34,14 +34,17 @@ class Transaction(models.Model):
         self.save()
 
     def restore(self):
-        """Restore a soft-deleted group."""
-        self.is_active = True
-        TransactionParticipant.all_objects.filter(transaction=self).update(is_active=True)
-        self.save()
+        """Restore a soft-deleted transaction."""
+        transaction = Transaction.all_objects.filter(id=self.id).first()
+        if not transaction:
+            return
+        transaction.is_active = True
+        transaction.save()
+        TransactionParticipant.all_objects.filter(transaction=transaction).update(is_active=True)
 
     def save(self, *args, **kwargs):
         if self.pk:
-            original = Transaction.objects.get(pk=self.pk)
+            original = Transaction.all_objects.get(pk=self.pk)
             if original.created_by != self.created_by:
                 raise PermissionError("Only the user who created this transaction can modify it.")
         super(Transaction, self).save(*args, **kwargs)
@@ -55,6 +58,7 @@ class TransactionParticipant(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, db_index=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, db_index=True)
     amount_owed = models.DecimalField(max_digits=10, decimal_places=2)
+    is_transaction_sattled = models.BooleanField(default=False)
 
     objects = ActiveManager()
     all_objects = models.Manager()

@@ -1,5 +1,6 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from group.models import Group, GroupParticipant
+from group.utils import can_group_be_deleted
 
 
 class GroupParticipantInline(admin.TabularInline):
@@ -16,12 +17,26 @@ class GroupAdmin(admin.ModelAdmin):
     search_fields = ('group_name', 'created_by__username')
     inlines = [GroupParticipantInline]
     readonly_fields = ('created_at', 'updated_at')
-    actions = ["restore_groups"]
+    actions = ["soft_delete_group", "restore_groups"]
 
-    def delete_queryset(self, request, queryset):
-        """Override bulk delete action to perform soft delete"""
+    def soft_delete_group(self, request, queryset):
+        """Action to perform soft delete"""
         for obj in queryset:
             obj.delete()
+
+    def delete_queryset(self, request, queryset):
+        """Override bulk delete action to allow partial deletion."""
+
+        restricted_objects = [obj for obj in queryset if not can_group_be_deleted(obj)]
+
+        if restricted_objects:
+            messages.warning(request, "Some groups were not deleted because they have not saattled transactions.")
+            return
+        total_number_of_groups = len(queryset)
+        for obj in queryset:
+            obj.participants.clear()
+        queryset.delete()
+        messages.success(request, f"Successfully deleted {total_number_of_groups} groups.")
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:

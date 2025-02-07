@@ -1,59 +1,60 @@
-from django.db.models.signals import post_delete
+from django.db.models.signals import pre_save, post_save, pre_delete
 from django.dispatch import receiver
-from transaction.models import Transaction, TransactionParticipant, UserBalance
+from transaction.models import Transaction
+from transaction.utils import update_user_balances_on_delete_or_restore
 from activity.models import Activity, ActivityType
 
 
-@receiver(post_delete, sender=Transaction)
-def handle_transaction_deletion(sender, instance, **kwargs):
-    """
-    1. Reverse the balances when a transaction is deleted.
-    2. Log an activity for tracking.
-    """
-    payer_id = instance.payer.id
-    participants = TransactionParticipant.objects.filter(transaction=instance)
-    participant_user_ids = participants.values_list('user_id', flat=True)
-    user_balance_pairs = []
+@receiver(pre_save, sender=Transaction)
+def capture_old_transaction_state(sender, instance, **kwargs):
+    """Capture the previous state of is_active before saving."""
+    try:
+        old_instance = sender.all_objects.get(pk=instance.pk)
+        instance._old_is_active = old_instance.is_active
+    except sender.DoesNotExist:
+        instance._old_is_active = None
 
-    for user_id in participant_user_ids:
-        sorted_tuple = tuple(sorted((payer_id, user_id)))
-        user_balance_pairs.append(sorted_tuple)
 
-    initiator_ids = [data[0] for data in user_balance_pairs]
-    participant_ids = [data[1] for data in user_balance_pairs]
+@receiver(post_save, sender=Transaction)
+def handle_transaction_modification_change(sender, instance, created, **kwargs):
+    """Handle actions when a transaction is reactivated from a soft delete."""
+    if not created:
+        old_is_active = getattr(instance, "_old_is_active", None)
 
-    existing_balances = {
-        (balance.initiator.id, balance.participant.id): balance
-        for balance in UserBalance.objects.filter(
-            initiator_id__in=initiator_ids,
-            participant_id__in=participant_ids
-        )
-    }
+        if old_is_active is False and instance.is_active:
+            update_user_balances_on_delete_or_restore(instance, reverse=True)
+            Activity.objects.create(
+                user_id=instance.created_by,
+                activity_type=ActivityType.RESTORED_TRANSACTION,
+                transaction_id=instance,
+                comments={"message": f"Transaction '{instance.id}' was restored."},
+            )
 
-    for ids, blc in existing_balances.items():
-        initiator = ids[0]
-        participant = ids[1]
-        is_initiator_payer = payer_id == initiator
-
-        if is_initiator_payer:
-            transaction_participant = participants.filter(user=participant).first()
-            if transaction_participant:
-                blc.balance -= transaction_participant.amount_owed
-                blc.total_amount_paid -= transaction_participant.amount_owed
-                blc.transaction_count -= 1
-                blc.save()
+        elif old_is_active is True and not instance.is_active:
+            update_user_balances_on_delete_or_restore(instance, reverse=False)
+            Activity.objects.create(
+                user_id=instance.created_by,
+                activity_type=ActivityType.DELETED_TRANSACTION,
+                transaction_id=instance,
+                comments={"message": f"Transaction '{instance.id}' was deleted."},
+            )
         else:
-            transaction_participant = participants.filter(user=initiator).first()
-            if transaction_participant:
-                blc.balance += transaction_participant.amount_owed
-                blc.total_amount_received -= transaction_participant.amount_owed
-                blc.transaction_count -= 1
-                blc.save()
+            Activity.objects.create(
+                user_id=instance.created_by,
+                activity_type=ActivityType.MODIFIED_TRANSACTION,
+                transaction_id=instance,
+                comments={"message": f"Transaction '{instance.id}' was modified."},
+            )
 
-    if instance.created_by:
+    else:
         Activity.objects.create(
             user_id=instance.created_by,
+            activity_type=ActivityType.ADDED_TRANSACTION,
             transaction_id=instance,
-            activity_type=ActivityType.DELETED_TRANSACTION,
-            comments={"message": f"Transaction {instance.id} was deleted and balances were updated."},
+            comments={"message": f"{instance.created_by.email} created the transaction '{instance.id}'"},
         )
+
+
+@receiver(pre_delete, sender=Transaction)
+def handle_user_balance_on_transaction_delete(sender, instance, **kwargs):
+    update_user_balances_on_delete_or_restore(instance, reverse=False)
