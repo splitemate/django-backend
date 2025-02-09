@@ -94,3 +94,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         if not self.invite_token:
             self.invite_token = generate_unique_random_string()
         super().save(*args, **kwargs)
+
+    def get_users_details(self, list_of_users_ids):
+        """Get user details"""
+        users = [
+            {**user, 'id': str(user['id'])}
+            for user in User.objects.filter(id__in=list_of_users_ids).values('id', 'name', 'email', 'image_url')
+        ]
+        return users

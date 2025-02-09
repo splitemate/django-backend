@@ -37,6 +37,21 @@ class Group(models.Model):
         self.is_active = True
         self.save()
 
+    def get_group_members(self):
+        return list(GroupParticipant.objects.filter(group=self).values_list('user_id', flat=True))
+
+    def get_group_ws_data(self):
+        return {
+            'id': str(self.id),
+            'group_name': self.group_name,
+            'description': self.description,
+            'created_by': str(self.created_by.id),
+            'group_type': self.group_type,
+            'is_active': self.is_active,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
+        }
+
     def __str__(self):
         return self.group_name
 

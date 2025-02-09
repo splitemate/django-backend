@@ -15,7 +15,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
 django_asgi_app = get_asgi_application()
 
 from middleware.jwt_auth_middleware import JwtAuthMiddleware  # noqa
-from transaction import routing  # noqa
+from core import routing  # noqa
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,

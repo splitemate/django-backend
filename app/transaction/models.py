@@ -49,6 +49,21 @@ class Transaction(models.Model):
                 raise PermissionError("Only the user who created this transaction can modify it.")
         super(Transaction, self).save(*args, **kwargs)
 
+    def get_split_details(self) -> list:
+        """Get split details of a transaction."""
+        participants = TransactionParticipant.objects.filter(transaction=self)
+        split_details = []
+        for participant in participants:
+            split_details.append({
+                'user': str(participant.user),
+                'amount': float(participant.amount_owed)
+            })
+        return split_details
+
+    def get_associated_members(self) -> list[int]:
+        """Get associated user IDs of a transaction."""
+        return list(TransactionParticipant.objects.filter(transaction=self).values_list('user_id', flat=True))
+
     def __str__(self):
         return f'{self.payer} - {self.total_amount}'
 

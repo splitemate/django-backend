@@ -9,7 +9,9 @@ from django.utils import timezone
 from django.db import transaction
 from itertools import chain
 from app.helper import Helper
+from transaction.utils import TransactionHelper
 from datetime import datetime
+from core.context import set_custom_context, clear_custom_context
 
 
 User = get_user_model()
@@ -171,7 +173,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
         split_details = validated_data['split_details']
 
         initial_user = self.context.get('user') or getattr(self.context.get('request'), 'user', None)
-
+        set_custom_context('exclude_user', initial_user.id)
         transaction = Transaction.objects.create(
             payer=payer,
             group=group,
@@ -182,6 +184,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
             created_by=initial_user,
             split_count=len(split_details)
         )
+        clear_custom_context()
 
         participants = [
             TransactionParticipant(
@@ -197,10 +200,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
         balance_changes = {}
 
         self.accumulate_balance_changes(balance_changes, payer, split_details)
-        filtered_records = self.bulk_update_user_balance(balance_changes)
-        ledger_dict = Helper.pre_process_user_balance(filtered_records=filtered_records)
-
-        Helper.broadcast_transaction_message(model='transaction', method='create', transaction_obj=transaction, exclude_user=initial_user, ledger_dict=ledger_dict, split_details=split_details)
+        self.bulk_update_user_balance(balance_changes)
         return transaction
 
 
@@ -365,11 +365,12 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         transaction_date = validated_data.get('transaction_date', instance.transaction_date)
 
         split_details = validated_data.get('split_details', [])
-        split_details = Helper.transform_split_data(split_details)
+        split_details = TransactionHelper.transform_split_data(split_details)
 
         user = self.context.get('user') or getattr(self.context.get('request'), 'user', None)
         initial_user = user
         initial_user_id = getattr(user, 'id', False)
+        set_custom_context('exclude_user', initial_user.id)
 
         if instance.created_by.id != initial_user_id:
             Helper.raise_validation_error("ERR_NOT_OWNER")
@@ -394,6 +395,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         instance.split_count = len(split_details)
         instance.updated_at = datetime.now()
         instance.save()
+        clear_custom_context()
 
         existing_participants = {p.user_id: p for p in instance.transactionparticipant_set.all()}
         new_user_ids = {split['user']: split['amount'] for split in split_details}
@@ -428,14 +430,5 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             split_details.append({'user': user, 'amount': amount * -1, 'remove_entry': True})
 
         self.accumulate_balance_changes(balance_changes, payer, split_details)
-        filtered_records = self.bulk_update_user_balance(balance_changes)
-        ledger_dict = Helper.pre_process_user_balance(filtered_records=filtered_records)
-        Helper.broadcast_transaction_message(
-            model='transaction',
-            method='update',
-            transaction_obj=instance,
-            exclude_user=initial_user,
-            ledger_dict=ledger_dict,
-            split_details=validated_data.get('split_details', [])
-        )
+        self.bulk_update_user_balance(balance_changes)
         return instance

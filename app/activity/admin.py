@@ -16,10 +16,10 @@ class ActivityAdmin(admin.ModelAdmin):
 
     def formatted_comments(self, obj):
         """Display comments as JSON in a readable format"""
-        if not obj.comments:  # If comments is None or empty
+        if not obj.comments:
             return "-"
 
-        message = obj.comments.get("message", obj.comments)  # Use the whole JSON if no "message" key
+        message = obj.comments.get("message", obj.comments)
         return format_html(f"<pre>{message}</pre>")
 
     def group_display(self, obj):
