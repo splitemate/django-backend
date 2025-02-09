@@ -48,8 +48,8 @@ class Group(models.Model):
             'created_by': str(self.created_by.id),
             'group_type': self.group_type,
             'is_active': self.is_active,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
         }
 
     def __str__(self):

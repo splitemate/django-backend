@@ -7,7 +7,7 @@ from activity.models import Activity, ActivityType
 @receiver(post_save, sender=GroupParticipant)
 def track_participant_addition(sender, instance, created, **kwargs):
     if created:
-        group_members = instance.get_group_members()
+        group_members = instance.group.get_group_members()
         activity = Activity.objects.create(
             user_id=instance.user,
             activity_type=ActivityType.ADDED_TO_GROUP,
