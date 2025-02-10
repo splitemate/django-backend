@@ -55,7 +55,7 @@ class Transaction(models.Model):
         split_details = []
         for participant in participants:
             split_details.append({
-                'user': str(participant.user),
+                'user': str(participant.user.id),
                 'amount': float(participant.amount_owed)
             })
         return split_details
