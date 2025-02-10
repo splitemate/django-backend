@@ -3,6 +3,7 @@ from copy import deepcopy
 from channels.layers import get_channel_layer
 from decimal import Decimal
 from django.forms.models import model_to_dict
+from django.db.models import F
 from transaction.models import TransactionParticipant, UserBalance
 
 
@@ -247,7 +248,7 @@ class TransactionHelper:
 
         user_balances = UserBalance.objects.filter(
             initiator__in=participants, participant__in=participants
-        )
+        ).exclude(initiator=F('participant'))
 
         user_balances_dict = TransactionHelper.pre_process_user_balance(filtered_records=user_balances)
 

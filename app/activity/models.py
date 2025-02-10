@@ -28,6 +28,18 @@ class Activity(models.Model):
     comments = models.JSONField(blank=True, null=True)
     created_date = models.DateTimeField(auto_now_add=True)
 
+    def get_activity_ws_data(self):
+        return {
+            "id": str(self.id),
+            "user_id": str(self.user_id.id),
+            "group_id": str(self.group_id.id) if self.group_id else "",
+            "transaction_id": str(self.transaction_id.id) if self.transaction_id else "",
+            "activity_type": self.activity_type,
+            "related_users_ids": list(map(str, list(self.related_users_ids.values_list("id", flat=True)))),
+            "comments": self.comments,
+            "created_date": self.created_date.isoformat(),
+        }
+
     def generate_explanation(self):
         """Generates a human-readable explanation based on JSON changes"""
         if self.activity_type != "modified_transaction" or not self.comments:

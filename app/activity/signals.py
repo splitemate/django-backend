@@ -14,6 +14,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
     exclude_user = get_custom_context('exclude_user')
     exclude_user = str(exclude_user) if exclude_user else None
     associated_members = instance.related_users_ids.all().values_list('id', flat=True)
+    activity_ws_data = instance.get_activity_ws_data()
 
     channel_layer = get_channel_layer()
     if instance.activity_type in [ActivityType.ADDED_TRANSACTION, ActivityType.MODIFIED_TRANSACTION, ActivityType.DELETED_TRANSACTION, ActivityType.RESTORED_TRANSACTION]:
@@ -21,6 +22,9 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
             if exclude_user and exclude_user == str(user_id):
                 continue
             transaction_data = TransactionHelper.get_transaction_ws_data(instance.transaction_id, user_id)
+            transaction_data.update({
+                "activity": activity_ws_data
+            })
             data = {
                 'type': 'transaction_message',
                 'data': transaction_data
@@ -31,6 +35,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
             )
 
     elif instance.activity_type in [ActivityType.ADDED_YOU_AS_FRIEND, ActivityType.REMOVED_YOU_AS_FRIEND]:
+        activity_ws_data = instance.get_activity_ws_data()
         for user_id in associated_members:
             if user_id == instance.user_id.id:
                 continue
@@ -38,7 +43,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
             data = {
                 'type': 'transaction_message',
                 'data': {
-                    "type": instance.activity_type,
+                    "activity": activity_ws_data,
                     "user": {
                         "id": user.id,
                         "name": user.name,
@@ -57,13 +62,14 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
         group_details = instance.group_id.get_group_ws_data()
         group_members = instance.group_id.get_group_members()
         participants = instance.user_id.get_users_details(group_members)
+        activity_ws_data = instance.get_activity_ws_data()
         for user_id in associated_members:
             data = {
                 'type': 'transaction_message',
                 'data': {
                     "type": instance.activity_type,
                     "group_details": group_details,
-                    "message": instance.comments.get('message'),
+                    "activity": activity_ws_data,
                     "participant_details": participants
                 }
             }

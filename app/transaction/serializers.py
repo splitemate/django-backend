@@ -358,7 +358,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         payer = validated_data.get('payer', instance.payer)
-        group = validated_data.get('group', instance.group)
+        group = validated_data.get('group')
         total_amount = validated_data.get('total_amount', instance.total_amount)
         description = validated_data.get('description', instance.description)
         transaction_type = validated_data.get('transaction_type', instance.transaction_type)
