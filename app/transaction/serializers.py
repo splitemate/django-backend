@@ -4,6 +4,7 @@ Serializers for Transaction API View
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from transaction.models import Transaction, TransactionParticipant, UserBalance
+from django.dispatch import Signal
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
@@ -15,6 +16,7 @@ from core.context import set_custom_context, clear_custom_context
 
 
 User = get_user_model()
+post_bulk_create_participants = Signal()
 
 
 class AddTransactionSerializer(serializers.ModelSerializer):
@@ -201,6 +203,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
 
         self.accumulate_balance_changes(balance_changes, payer, split_details)
         self.bulk_update_user_balance(balance_changes)
+        post_bulk_create_participants.send(sender=Transaction, instance=transaction)
         return transaction
 
 
@@ -370,7 +373,6 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         user = self.context.get('user') or getattr(self.context.get('request'), 'user', None)
         initial_user = user
         initial_user_id = getattr(user, 'id', False)
-        set_custom_context('exclude_user', initial_user.id)
 
         if instance.created_by.id != initial_user_id:
             Helper.raise_validation_error("ERR_NOT_OWNER")
@@ -394,8 +396,6 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         instance.transaction_date = transaction_date
         instance.split_count = len(split_details)
         instance.updated_at = datetime.now()
-        instance.save()
-        clear_custom_context()
 
         existing_participants = {p.user_id: p for p in instance.transactionparticipant_set.all()}
         new_user_ids = {split['user']: split['amount'] for split in split_details}
@@ -431,4 +431,9 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         self.accumulate_balance_changes(balance_changes, payer, split_details)
         self.bulk_update_user_balance(balance_changes)
+
+        set_custom_context('exclude_user', initial_user.id)
+        instance.save()
+        clear_custom_context()
+
         return instance

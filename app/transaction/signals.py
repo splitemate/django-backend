@@ -2,6 +2,7 @@ from django.db.models.signals import pre_save, post_save, pre_delete
 from django.dispatch import receiver
 from transaction.models import Transaction
 from transaction.utils import TransactionHelper
+from transaction.serializers import post_bulk_create_participants
 from activity.models import Activity, ActivityType
 
 
@@ -54,15 +55,18 @@ def handle_transaction_modification_change(sender, instance, created, **kwargs):
             )
         activity.related_users_ids.add(*related_user_ids)
 
-    else:
-        activity = Activity.objects.create(
-            user_id=instance.created_by,
-            activity_type=ActivityType.ADDED_TRANSACTION,
-            transaction_id=instance,
-            comments={"message": f"{instance.created_by.email} created the transaction '{instance.id}'"},
-        )
-        related_user_ids = set(instance.get_associated_members())
-        activity.related_users_ids.add(*related_user_ids)
+
+@receiver(post_bulk_create_participants)
+def handle_transaction_creation_with_partiticpants(sender, instance, **kwargs):
+    transaction = instance
+    activity = Activity.objects.create(
+        user_id=transaction.created_by,
+        activity_type=ActivityType.ADDED_TRANSACTION,
+        transaction_id=transaction,
+        comments={"message": f"{transaction.created_by.email} created the transaction '{transaction.id}'"},
+    )
+    related_user_ids = set(transaction.get_associated_members())
+    activity.related_users_ids.add(*related_user_ids)
 
 
 @receiver(pre_delete, sender=Transaction)
