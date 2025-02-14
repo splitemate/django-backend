@@ -258,9 +258,16 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         return data
 
+    def remove_transaction_count(self, is_payer_changed, data, old_payer, new_payer):
+        if not is_payer_changed:
+            return data
+        for (ini, pyr), value in data.items():
+            if old_payer.id in (ini, pyr) and new_payer.id not in (ini, pyr):
+                value['transaction_count'] -= 1
+        return data
+
     def accumulate_balance_changes(self, balance_changes, payer, split_details):
         """Accumulate balance changes for each initiator-participant pair in a dictionary."""
-
         participant_ids = [split['user'] for split in split_details]
         participants = User.objects.filter(id__in=participant_ids)
         participant_map = {user.id: user for user in participants}
@@ -268,13 +275,18 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         for split in split_details:
             participant_id = split['user']
             amount_owed = split['amount']
+            is_payer_changed = bool(split.get('old_payer'))
+            old_payer = split.get('old_payer')
 
             participant = participant_map.get(int(participant_id))
 
             if not participant:
                 Helper.raise_validation_error('ERR_PARTICIPANT_NOT_FOUND', {'participant_id': participant_id})
 
-            initiator, participant = sorted([payer, participant], key=lambda x: x.id)
+            if is_payer_changed:
+                initiator, participant = sorted([old_payer, participant], key=lambda x: x.id)
+            else:
+                initiator, participant = sorted([payer, participant], key=lambda x: x.id)
             is_initiator_payer = payer == initiator
 
             key = (initiator.id, participant.id)
@@ -288,10 +300,14 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                     'total_amount_received': 0,
                     'transaction_count': 0,
                 }
-
-            balance_change = amount_owed if is_initiator_payer else -amount_owed
-            total_received_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
-            total_paid_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
+            if is_payer_changed:
+                balance_change = -amount_owed if is_initiator_payer else amount_owed
+                total_received_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
+                total_paid_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
+            else:
+                balance_change = amount_owed if is_initiator_payer else -amount_owed
+                total_received_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
+                total_paid_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
 
             if balance_changes[key].get('remove_entry', False):
                 balance_changes[key]['balance'] -= balance_change
@@ -336,7 +352,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                         balance=changes['balance'],
                         total_amount_paid=changes['total_amount_paid'],
                         total_amount_received=changes['total_amount_received'],
-                        transaction_count=changes['transaction_count'],
+                        transaction_count=1,
                         last_transaction_date=timezone.now(),
                         is_active=True
                     )
@@ -360,6 +376,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             return filtered_records
 
     def update(self, instance, validated_data):
+        old_payer = instance.payer
         payer = validated_data.get('payer', instance.payer)
         group = validated_data.get('group')
         total_amount = validated_data.get('total_amount', instance.total_amount)
@@ -367,6 +384,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         transaction_type = validated_data.get('transaction_type', instance.transaction_type)
         transaction_date = validated_data.get('transaction_date', instance.transaction_date)
 
+        is_payer_changed = old_payer != payer
         split_details = validated_data.get('split_details', [])
         split_details = TransactionHelper.transform_split_data(split_details)
 
@@ -399,6 +417,9 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         existing_participants = {p.user_id: p for p in instance.transactionparticipant_set.all()}
         new_user_ids = {split['user']: split['amount'] for split in split_details}
+        if is_payer_changed:
+            for u_id, details in existing_participants.items():
+                split_details.append({'user': u_id, 'amount': details.amount_owed * -1, 'old_payer': old_payer})
 
         for user_id, amount in new_user_ids.items():
             if user_id in existing_participants:
@@ -420,7 +441,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         for data in split_details:
             id = data.get('user')
             user = old_split_details_dict.get(id)
-            if user:
+            if user and not is_payer_changed:
                 old_amount = data.get('amount')
                 new_amount = user.get('amount')
                 data['amount'] = old_amount - new_amount if old_amount != new_amount else 0
@@ -430,8 +451,13 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             split_details.append({'user': user, 'amount': amount * -1, 'remove_entry': True})
 
         self.accumulate_balance_changes(balance_changes, payer, split_details)
+        balance_changes = self.remove_transaction_count(
+            is_payer_changed=is_payer_changed,
+            data=balance_changes,
+            old_payer=old_payer,
+            new_payer=payer
+        )
         self.bulk_update_user_balance(balance_changes)
-
         set_custom_context('exclude_user', initial_user.id)
         instance.save()
         clear_custom_context()

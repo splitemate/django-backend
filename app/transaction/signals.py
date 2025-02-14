@@ -71,4 +71,6 @@ def handle_transaction_creation_with_partiticpants(sender, instance, **kwargs):
 
 @receiver(pre_delete, sender=Transaction)
 def handle_user_balance_on_transaction_delete(sender, instance, **kwargs):
+    if not instance.is_active:
+        return
     TransactionHelper.update_user_balances_on_delete_or_restore(instance, reverse=False)
