@@ -45,6 +45,10 @@ class AddTransactionSerializer(serializers.ModelSerializer):
                 Helper.raise_validation_error('ERR_PARTICIPANT_NOT_FOUND', {'participant_id': participant_id})
 
             initiator, participant = sorted([payer, participant], key=lambda x: x.id)
+
+            if initiator.id == participant.id:
+                continue
+
             is_initiator_payer = payer == initiator
 
             key = (initiator.id, participant.id)
@@ -139,6 +143,7 @@ class AddTransactionSerializer(serializers.ModelSerializer):
 
         total_split_amount = 0
 
+        split_users_set = set()
         for split in split_details:
             try:
                 user = int(split['user'])
@@ -148,6 +153,11 @@ class AddTransactionSerializer(serializers.ModelSerializer):
             except (KeyError, ValueError):
                 Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
             user_ids.append(user)
+
+            if user in split_users_set:
+                Helper.raise_validation_error("ERR_DUPLICATE_USER_IN_SPLIT")
+
+            split_users_set.add(user)
             total_split_amount += amount
 
         if total_split_amount != total_amount:
@@ -231,6 +241,7 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         total_split_amount = 0
 
+        split_users_set = set()
         for split in split_details:
             try:
                 user = int(split['user'])
@@ -240,6 +251,11 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             except (KeyError, ValueError):
                 Helper.raise_validation_error("ERR_SPLIT_DETAILS_REQUIRED")
             user_ids.append(user)
+
+            if user in split_users_set:
+                Helper.raise_validation_error("ERR_DUPLICATE_USER_IN_SPLIT")
+
+            split_users_set.add(user)
             total_split_amount += amount
 
         if total_split_amount != total_amount:
@@ -287,6 +303,10 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 initiator, participant = sorted([old_payer, participant], key=lambda x: x.id)
             else:
                 initiator, participant = sorted([payer, participant], key=lambda x: x.id)
+
+            if initiator.id == participant.id:
+                continue
+
             is_initiator_payer = payer == initiator
 
             key = (initiator.id, participant.id)
@@ -318,6 +338,8 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
             if split.get('remove_entry', False):
                 balance_changes[key]['transaction_count'] -= 1
+            else:
+                balance_changes[key]['transaction_count'] += split.get('increase_count', 0)
 
     def bulk_update_user_balance(self, balance_changes):
         """Update the UserBalance in bulk based on the accumulated balance changes."""
@@ -404,7 +426,11 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             old_split_details_dict[detail['user_id']] = {'amount': detail['amount_owed']}
             old_split_details.append({'user': detail['user_id'], 'amount': detail['amount_owed']})
 
-        excluded_ids = list(set(user.get('user') for user in old_split_details) - set(user.get('user') for user in split_details))
+        old_users = {user['user'] for user in old_split_details}
+        new_users = {user['user'] for user in split_details}
+
+        excluded_ids = list(old_users - new_users)
+        included_ids = list(new_users - old_users)
 
         instance.payer = payer
         instance.group = group
@@ -420,6 +446,8 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         if is_payer_changed:
             for u_id, details in existing_participants.items():
                 split_details.append({'user': u_id, 'amount': details.amount_owed * -1, 'old_payer': old_payer})
+            old_participant_ids = set(existing_participants.keys())
+            excluded_ids = list(set(excluded_ids) - old_participant_ids)
 
         for user_id, amount in new_user_ids.items():
             if user_id in existing_participants:
@@ -445,6 +473,8 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 old_amount = data.get('amount')
                 new_amount = user.get('amount')
                 data['amount'] = old_amount - new_amount if old_amount != new_amount else 0
+            elif id in included_ids:
+                data['increase_count'] = 1
 
         for user in excluded_ids:
             amount = old_split_details_dict.get(user, {}).get('amount', 0)

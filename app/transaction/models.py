@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from group.models import Group
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q, F
 from core.models import ActiveManager
 
 
@@ -95,9 +95,19 @@ class UserBalance(models.Model):
     class Meta:
         unique_together = ('initiator', 'participant')
         ordering = ['last_transaction_date']
+        constraints = [
+            models.CheckConstraint(
+                check=~Q(initiator=F('participant')),
+                name='initiator_not_equal_participant'),
+            ]
 
     def __str__(self):
         return f"Balance between {self.initiator} and {self.participant}: {self.balance}"
+
+    def save(self, *args, **kwargs):
+        if self.initiator_id == self.participant_id:
+            raise ValueError("Cannot create a UserBalance record for the same user (initiator == participant).")
+        super().save(*args, **kwargs)
 
     @classmethod
     def get_user_balance(cls, user_id) -> dict:

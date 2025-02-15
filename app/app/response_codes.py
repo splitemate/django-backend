@@ -43,6 +43,11 @@ RESPONSE_CODES = {
         "message": "Participant not found."
     },
 
+    "ERR_DUPLICATE_USER_IN_SPLIT": {
+        "code": "E1010",
+        "message": "Duplicate Participant Found in Split"
+    },
+
     "SUCCESS_TRANSACTION_CREATED": {
         "code": "S2000",
         "message": "Transaction created successfully."
