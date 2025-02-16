@@ -41,3 +41,65 @@ class ModifyTransactionView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetExistingTransactionView(APIView):
+    """Get existing transaction of splitemate"""
+
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def get(self, request, pk):
+        transaction = get_object_or_404(Transaction.objects.filter(is_active=True), pk=pk)
+        participant_ids = transaction.get_associated_members()
+        if request.user.id in participant_ids:
+            data = transaction.get_transaction_data()
+            return Response(data=data, status=200)
+        else:
+            return Response(
+                {"message": "You are not participant of the transaction"},
+                status=403
+            )
+
+
+class DeleteTransactionView(APIView):
+    """Delete existing transaction of splitemate"""
+
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def delete(self, request, pk):
+        transaction = get_object_or_404(Transaction.objects.filter(is_active=True), pk=pk)
+        if request.user.id not in transaction.allowed_to_modify_transaction():
+            return Response(
+                {"message": "You are not owner of the transaction"},
+                status=403
+            )
+        transaction.delete()
+        return Response({"message": "Transaction deleted successfully"}, status=204)
+
+
+class RestoreTransactionView(APIView):
+    """Restore the transaction of splitemate"""
+
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def patch(self, request, pk):
+        transaction = get_object_or_404(Transaction.all_objects, pk=pk)
+
+        if transaction.is_active:
+            return Response(
+                {"message": "Transaction is already active"},
+                status=400
+            )
+        if request.user.id not in transaction.allowed_to_modify_transaction():
+            return Response(
+                {"message": "You are not owner of the transaction"},
+                status=403
+            )
+        transaction.restore()
+        return Response(
+            {"message": "Transaction Restored successfully"},
+            status=200
+        )

@@ -62,7 +62,34 @@ class Transaction(models.Model):
 
     def get_associated_members(self) -> list[int]:
         """Get associated user IDs of a transaction."""
-        return list(TransactionParticipant.objects.filter(transaction=self).values_list('user_id', flat=True))
+        return list({*TransactionParticipant.objects.filter(transaction=self).values_list('user_id', flat=True), self.payer.id} - {None})
+
+    def allowed_to_modify_transaction(self) -> list[int]:
+        """Get list of Ids who can modify the transaction"""
+        return list({self.payer.id, self.created_by.id})
+
+    def get_transaction_data(self) -> dict:
+        """Get transaction details"""
+        is_group = bool(self.group)
+        group_id = str(self.group.id) if self.group else ""
+
+        data = {
+            "id": str(self.id),
+            "payer": str(self.payer.id),
+            "is_group": is_group,
+            "group": group_id,
+            "total_amount": float(self.total_amount),
+            "split_count": self.split_count,
+            "description": self.description,
+            "transaction_type": self.transaction_type,
+            "transaction_date": self.transaction_date.isoformat(),
+            "created_by": str(self.created_by.id),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "split_details": self.get_split_details()
+        }
+
+        return data
 
     def __str__(self):
         return f'{self.payer} - {self.total_amount}'

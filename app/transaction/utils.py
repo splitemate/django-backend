@@ -62,7 +62,7 @@ class TransactionHelper:
                     balance.balance += amount_owed
                     balance.total_amount_received -= amount_owed
 
-                balance.transaction_count -= factor
+                balance.transaction_count -= factor if amount_owed else 0
                 balance.save()
 
     @staticmethod

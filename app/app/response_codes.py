@@ -37,15 +37,21 @@ RESPONSE_CODES = {
         "code": "E1008",
         "message": "Transaction not found."
     },
-
     "ERR_PARTICIPANT_NOT_FOUND": {
         "code": "E1009",
         "message": "Participant not found."
     },
-
     "ERR_DUPLICATE_USER_IN_SPLIT": {
         "code": "E1010",
         "message": "Duplicate Participant Found in Split"
+    },
+    "ERR_PAYER_NOT_IN_SPLIT": {
+        "code": "E1011",
+        "message": "Payer must be in the split"
+    },
+    "ERR_NOT_ALL_GROUP_MEMBERS_INCLUDED ": {
+        "code": "E1012",
+        "message": "All group participant must be in the split"
     },
 
     "SUCCESS_TRANSACTION_CREATED": {
