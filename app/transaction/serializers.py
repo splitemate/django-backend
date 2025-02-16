@@ -548,3 +548,10 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         instance.save()
         clear_custom_context()
         return instance
+
+
+class BulkTransactionSerializer(serializers.Serializer):
+    transaction_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False
+    )

@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.core.paginator import Paginator
+from django.db.models import Q
 from user.renderers import UserRenderer
 from transaction.models import Transaction
 from transaction.serializers import (
     AddTransactionSerializer,
-    ModifyTransactionSerializer
+    ModifyTransactionSerializer,
+    BulkTransactionSerializer
 )
 
 
@@ -103,3 +106,50 @@ class RestoreTransactionView(APIView):
             {"message": "Transaction Restored successfully"},
             status=200
         )
+
+
+class GetBulkTransactionView(APIView):
+
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def post(self, request):
+        serializer = BulkTransactionSerializer(data=request.data)
+        if serializer.is_valid():
+            page_str = request.query_params.get('page', '1')
+            limit_str = request.query_params.get('limit', '50')
+
+            try:
+                page = int(page_str)
+                page = page if page > 0 else 1
+                limit = int(limit_str)
+            except Exception as e:
+                print(e)
+                return Response(
+                    {"message": "Please provide page and limit as valid parameter"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            transaction_data = []
+            transaction_ids = serializer.validated_data['transaction_ids']
+            queryset = Transaction.objects.filter(
+                id__in=transaction_ids
+            ).filter(
+                Q(payer_id=request.user.id) | Q(transactionparticipant__user_id=request.user.id)
+            ).distinct()
+
+            paginator = Paginator(queryset, limit)
+            page_object = paginator.get_page(page)
+            entries = list(page_object.object_list)
+
+            for txn in entries:
+                transaction_data.append(txn.get_transaction_data())
+
+            has_more = page_object.has_next()
+
+            response_data = {
+                "transactions": transaction_data,
+                "has_more": has_more,
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
