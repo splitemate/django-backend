@@ -14,7 +14,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
     exclude_user = get_custom_context('exclude_user')
     exclude_user = str(exclude_user) if exclude_user else None
     associated_members = instance.related_users_ids.all().values_list('id', flat=True)
-    activity_ws_data = instance.get_activity_ws_data()
+    activity_ws_data = instance.get_activity_data()
 
     channel_layer = get_channel_layer()
     if instance.activity_type in [ActivityType.ADDED_TRANSACTION, ActivityType.MODIFIED_TRANSACTION, ActivityType.DELETED_TRANSACTION, ActivityType.RESTORED_TRANSACTION]:
@@ -35,7 +35,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
             )
 
     elif instance.activity_type in [ActivityType.ADDED_YOU_AS_FRIEND, ActivityType.REMOVED_YOU_AS_FRIEND]:
-        activity_ws_data = instance.get_activity_ws_data()
+        activity_ws_data = instance.get_activity_data()
         for user_id in associated_members:
             if user_id == instance.user_id.id:
                 continue
@@ -62,7 +62,7 @@ def track_activity_creation(sender, instance, action, pk_set, **kwargs):
         group_details = instance.group_id.get_group_ws_data()
         group_members = instance.group_id.get_group_members()
         participants = instance.user_id.get_users_details(group_members)
-        activity_ws_data = instance.get_activity_ws_data()
+        activity_ws_data = instance.get_activity_data()
         for user_id in associated_members:
             data = {
                 'type': 'transaction_message',

@@ -28,7 +28,7 @@ class Activity(models.Model):
     comments = models.JSONField(blank=True, null=True)
     created_date = models.DateTimeField(auto_now_add=True)
 
-    def get_activity_ws_data(self):
+    def get_activity_data(self):
         return {
             "id": str(self.id),
             "user_id": str(self.user_id.id),

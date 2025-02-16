@@ -13,4 +13,5 @@ urlpatterns = [
     path('add_friend/', include(('user.urls', 'user'), namespace='add_friend')),
     path('api/otp/', include(('otp.urls', 'otp'), namespace='otp')),
     path('api/transaction/', include(('transaction.urls', 'transaction'), namespace='transaction')),
+    path('api/activity/', include(('activity.urls', 'transaction'), namespace='activity')),
 ]
