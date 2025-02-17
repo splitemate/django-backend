@@ -7,6 +7,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from user.renderers import UserRenderer
 from transaction.models import Transaction
+from transaction.utils import TransactionHelper
 from transaction.serializers import (
     AddTransactionSerializer,
     ModifyTransactionSerializer,
@@ -118,13 +119,13 @@ class GetBulkTransactionView(APIView):
         if serializer.is_valid():
             page_str = request.query_params.get('page', '1')
             limit_str = request.query_params.get('limit', '50')
+            request_user_id = request.user.id
 
             try:
                 page = int(page_str)
                 page = page if page > 0 else 1
                 limit = int(limit_str)
-            except Exception as e:
-                print(e)
+            except Exception:
                 return Response(
                     {"message": "Please provide page and limit as valid parameter"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -135,7 +136,7 @@ class GetBulkTransactionView(APIView):
             queryset = Transaction.objects.filter(
                 id__in=transaction_ids
             ).filter(
-                Q(payer_id=request.user.id) | Q(transactionparticipant__user_id=request.user.id)
+                Q(payer_id=request_user_id) | Q(transactionparticipant__user_id=request_user_id)
             ).distinct()
 
             paginator = Paginator(queryset, limit)
@@ -143,7 +144,7 @@ class GetBulkTransactionView(APIView):
             entries = list(page_object.object_list)
 
             for txn in entries:
-                transaction_data.append(txn.get_transaction_data())
+                transaction_data.append(TransactionHelper.get_transaction_ws_data(transaction=txn, user_id=request_user_id))
 
             has_more = page_object.has_next()
 

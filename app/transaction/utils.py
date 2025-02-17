@@ -171,7 +171,7 @@ class TransactionHelper:
         data['transaction_date'] = data.get('transaction_date', '').isoformat()
         data['id'] = str(data.get('id', ''))
         data['payer'] = str(data.get('payer', ''))
-        data['group'] = str(data.get('group', '')) if data.get('group', '') else None
+        data['group'] = str(data.get('group', '')) if data.get('group', '') else ''
         data['created_by'] = str(data.get('created_by', ''))
         data['created_at'] = transaction_obj.created_at.isoformat()
         data['updated_at'] = transaction_obj.updated_at.isoformat()
