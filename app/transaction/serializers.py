@@ -287,79 +287,93 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
 
         return data
 
-    def remove_transaction_count(self, is_payer_changed, data, old_payer, new_payer):
-        if not is_payer_changed:
-            return data
-        for (ini, pyr), value in data.items():
-            if old_payer.id in (ini, pyr) and new_payer.id not in (ini, pyr):
-                value['transaction_count'] -= 1
-        return data
-
-    def accumulate_balance_changes(self, balance_changes, payer, split_details):
+    def accumulate_balance_changes(self, new_payer_id, old_payer_id, split_details, old_split_details):
         """Accumulate balance changes for each initiator-participant pair in a dictionary."""
-        participant_ids = [split['user'] for split in split_details]
-        participants = User.objects.filter(id__in=participant_ids)
-        participant_map = {user.id: user for user in participants}
 
-        for split in split_details:
-            participant_id = split['user']
-            amount_owed = split['amount']
-            is_payer_changed = bool(split.get('old_payer'))
-            old_payer = split.get('old_payer')
+        is_payer_changed = new_payer_id != old_payer_id
+        new_balance_map = {
+            (min(s['user'], new_payer_id), max(s['user'], new_payer_id)): s['amount'] for s in split_details if s['user'] != new_payer_id
+        }
 
-            # Skip zero-amount as new user balance
-            if amount_owed == 0:
-                continue
+        old_balance_map = {
+            (min(os['user'], old_payer_id), max(os['user'], old_payer_id)): os['amount'] for os in old_split_details if os['user'] != old_payer_id
+        }
 
-            participant = participant_map.get(int(participant_id))
-            if not participant:
-                Helper.raise_validation_error('ERR_PARTICIPANT_NOT_FOUND', {'participant_id': participant_id})
+        all_user_ids = set()
+        for key in list(new_balance_map.keys()) + list(old_balance_map.keys()):
+            all_user_ids.update(key)
 
-            if is_payer_changed:
-                initiator, participant = sorted([old_payer, participant], key=lambda x: x.id)
+        all_user_ids = list(all_user_ids)
+        all_users = User.objects.filter(id__in=all_user_ids)
+        all_users_map = {user.id: user for user in all_users}
+
+        modification_balance_map = {}
+
+        will_create_bal = {k: v for k, v in new_balance_map.items() if k not in old_balance_map}
+        will_reverse_bal = {k: v for k, v in old_balance_map.items() if k not in new_balance_map and is_payer_changed}
+        will_update_bal = {k: {'new_balance': new_balance_map[k], 'old_balance': old_balance_map[k]} for k in new_balance_map.keys() & old_balance_map.keys()}
+
+        for k, v in will_create_bal.items():
+            bal_initiator = k[0]
+            is_initiator_payer = (new_payer_id == bal_initiator)
+
+            amount_owed = v if is_initiator_payer else -v
+            total_paid_bal = v if is_initiator_payer else 0
+            total_received_bal = 0 if is_initiator_payer else v
+
+            modification_balance_map[k] = {
+                'initiator': all_users_map.get(k[0]),
+                'participant': all_users_map.get(k[1]),
+                'increase_balance': amount_owed,
+                'increase_transaction_count': 1,
+                'increase_total_amount_paid': total_paid_bal,
+                'increase_total_amount_received': total_received_bal
+            }
+
+        for k, v in will_reverse_bal.items():
+            bal_initiator = k[0]
+            is_initiator_payer = (new_payer_id == bal_initiator)
+
+            amount_owed = -v
+            total_paid_bal = 0 if is_initiator_payer else -v
+            total_received_bal = -v if is_initiator_payer else 0
+
+            modification_balance_map[k] = {
+                'initiator': all_users_map.get(k[0]),
+                'participant': all_users_map.get(k[1]),
+                'increase_balance': amount_owed,
+                'increase_transaction_count': -1,
+                'increase_total_amount_paid': total_paid_bal,
+                'increase_total_amount_received': total_received_bal
+            }
+
+        for k, data in will_update_bal.items():
+            old_amt = data['old_balance']
+            new_amt = data['new_balance']
+            delta = new_amt - old_amt
+
+            bal_initiator = k[0]
+            is_initiator_new_payer = (new_payer_id == bal_initiator)
+            is_initiator_old_payer = (old_payer_id == bal_initiator)
+
+            if is_initiator_new_payer == is_initiator_old_payer:
+                amount_owed = delta if is_initiator_new_payer else -delta
+                total_paid_bal = delta if is_initiator_new_payer else 0
+                total_received_bal = 0 if is_initiator_new_payer else delta
             else:
-                initiator, participant = sorted([payer, participant], key=lambda x: x.id)
+                amount_owed = new_amt + old_amt if is_initiator_new_payer else -(new_amt + old_amt)
+                total_paid_bal = new_amt if is_initiator_new_payer else -old_amt
+                total_received_bal = -old_amt if is_initiator_new_payer else new_amt
 
-            # Skip if same user
-            if initiator.id == participant.id:
-                continue
-
-            is_initiator_payer = (payer == initiator)
-            key = (initiator.id, participant.id)
-
-            if key not in balance_changes:
-                balance_changes[key] = {
-                    'initiator': initiator,
-                    'participant': participant,
-                    'balance': 0,
-                    'total_amount_paid': 0,
-                    'total_amount_received': 0,
-                    'transaction_count': 0,
-                }
-
-            # Decide sign
-            if is_payer_changed:
-                balance_change = -amount_owed if is_initiator_payer else amount_owed
-                total_received_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
-                total_paid_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
-            else:
-                balance_change = amount_owed if is_initiator_payer else -amount_owed
-                total_received_key = 'total_amount_received' if not is_initiator_payer else 'total_amount_paid'
-                total_paid_key = 'total_amount_paid' if not is_initiator_payer else 'total_amount_received'
-
-            # If 'remove_entry' is set, that means we are reversing a prior participant
-            if balance_changes[key].get('remove_entry', False):
-                balance_changes[key]['balance'] -= balance_change
-                balance_changes[key][total_paid_key] += amount_owed
-            else:
-                balance_changes[key]['balance'] += balance_change
-                balance_changes[key][total_received_key] += amount_owed
-
-            if split.get('remove_entry', False):
-                balance_changes[key]['transaction_count'] -= 1
-            else:
-                # Increase count if new entry
-                balance_changes[key]['transaction_count'] += split.get('increase_count', 0)
+            modification_balance_map[k] = {
+                'initiator': all_users_map.get(k[0]),
+                'participant': all_users_map.get(k[1]),
+                'increase_balance': amount_owed,
+                'increase_transaction_count': 0,
+                'increase_total_amount_paid': total_paid_bal,
+                'increase_total_amount_received': total_received_bal
+            }
+        return modification_balance_map
 
     def bulk_update_user_balance(self, balance_changes):
         """Update the UserBalance in bulk based on the accumulated balance changes."""
@@ -382,20 +396,20 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                 balance_record = existing_balances.get((initiator_id, participant_id))
 
                 if balance_record:
-                    balance_record.balance += changes['balance']
-                    balance_record.total_amount_paid += changes['total_amount_paid']
-                    balance_record.total_amount_received += changes['total_amount_received']
-                    balance_record.transaction_count += changes['transaction_count']
+                    balance_record.balance += changes['increase_balance']
+                    balance_record.total_amount_paid += changes['increase_total_amount_paid']
+                    balance_record.total_amount_received += changes['increase_total_amount_received']
+                    balance_record.transaction_count += changes['increase_transaction_count']
                     balance_record.last_transaction_date = timezone.now()
                     updates.append(balance_record)
                 else:
                     new_balance = UserBalance(
                         initiator=changes['initiator'],
                         participant=changes['participant'],
-                        balance=changes['balance'],
-                        total_amount_paid=changes['total_amount_paid'],
-                        total_amount_received=changes['total_amount_received'],
-                        transaction_count=1,  # starting from 1 for a new record
+                        balance=changes['increase_balance'],
+                        total_amount_paid=changes['increase_total_amount_paid'],
+                        total_amount_received=changes['increase_total_amount_received'],
+                        transaction_count=changes['increase_transaction_count'],
                         last_transaction_date=timezone.now(),
                         is_active=True
                     )
@@ -429,7 +443,6 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         transaction_type = validated_data.get('transaction_type', instance.transaction_type)
         transaction_date = validated_data.get('transaction_date', instance.transaction_date)
 
-        is_payer_changed = (old_payer != payer)
         split_details = validated_data.get('split_details', [])
         split_details = TransactionHelper.transform_split_data(split_details)
 
@@ -440,19 +453,15 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
         if initial_user_id not in instance.allowed_to_modify_transaction():
             Helper.raise_validation_error("ERR_NOT_OWNER")
 
-        balance_changes = {}
-        old_split_details_dict = {}
+        old_payer_id = old_payer.id
+        new_payer_id = payer.id
 
         # Grab old participants
+        old_split_details = []
         old_participant_qs = instance.transactionparticipant_set.values('user_id', 'amount_owed')
         for detail in old_participant_qs:
-            old_split_details_dict[detail['user_id']] = detail['amount_owed']
-
-        old_users = set(old_split_details_dict.keys())
-        new_users = {d['user'] for d in split_details}
-
-        excluded_ids = list(old_users - new_users)
-        included_ids = list(new_users - old_users)
+            old_split_details.append({'amount': float(detail['amount_owed']), 'user': int(detail['user_id'])})
+        old_split_details = TransactionHelper.transform_split_data(old_split_details)
 
         # Update instance fields
         instance.payer = payer
@@ -468,20 +477,6 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
             p.user_id: p for p in instance.transactionparticipant_set.all()
         }
         new_user_map = {split['user']: split['amount'] for split in split_details}
-
-        # If payer changed => reverse old participants for the old payer
-        if is_payer_changed:
-            for u_id, participant_obj in existing_participants.items():
-                # Append negative to undo old amounts
-                negative_amount = participant_obj.amount_owed * -1
-                split_details.append({
-                    'user': u_id,
-                    'amount': negative_amount,
-                    'old_payer': old_payer
-                })
-            # Remove them from excluded_ids so we don't double-subtract
-            old_participant_ids = set(existing_participants.keys())
-            excluded_ids = list(set(excluded_ids) - old_participant_ids)
 
         # Create or update participants
         for user_id, amount in new_user_map.items():
@@ -499,49 +494,8 @@ class ModifyTransactionSerializer(serializers.ModelSerializer):
                     user=get_object_or_404(User, id=user_id),
                     amount_owed=amount
                 )
+        balance_changes = self.accumulate_balance_changes(new_payer_id, old_payer_id, split_details, old_split_details)
 
-        # Delete any participants that are no longer in the new list
-        for leftover in existing_participants.values():
-            leftover.delete()
-
-        # Adjust amounts for updated participants
-        for entry in split_details:
-            current_uid = entry.get('user')
-            old_amount_owed = old_split_details_dict.get(current_uid, 0)
-            new_amt = entry.get('amount', 0)
-
-            if current_uid in included_ids and not is_payer_changed:
-                # brand-new user, set an increment for transaction_count
-                entry['increase_count'] = 1
-            elif (current_uid in old_users) and (not is_payer_changed):
-                # If it's an old participant, we set difference if amounts changed
-                new_amt = entry.get('amount', 0)
-                diff = new_amt - old_amount_owed
-                entry['amount'] = diff
-
-            if old_amount_owed > 0 and new_amt == 0:
-                entry.update({
-                    'remove_entry': True,
-                    'amount': old_amount_owed * -1
-                })
-
-        # Add negative entries for excluded participants
-        for user_id in excluded_ids:
-            old_amt = old_split_details_dict.get(user_id, 0)
-            split_details.append({
-                'user': user_id,
-                'amount': old_amt * -1,
-                'remove_entry': True
-            })
-
-        # Now accumulate & update balances
-        self.accumulate_balance_changes(balance_changes, payer, split_details)
-        balance_changes = self.remove_transaction_count(
-            is_payer_changed=is_payer_changed,
-            data=balance_changes,
-            old_payer=old_payer,
-            new_payer=payer
-        )
         self.bulk_update_user_balance(balance_changes)
 
         set_custom_context('exclude_user', user.id)
