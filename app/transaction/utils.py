@@ -3,7 +3,7 @@ from copy import deepcopy
 from channels.layers import get_channel_layer
 from decimal import Decimal
 from django.forms.models import model_to_dict
-from django.db.models import F
+from django.db.models import F, Q
 from transaction.models import TransactionParticipant, UserBalance
 
 
@@ -33,18 +33,19 @@ class TransactionHelper:
         payer_id = instance.payer.id
         participants = TransactionParticipant.all_objects.filter(transaction=instance)
         participant_user_ids = participants.values_list('user_id', flat=True)
-        user_balance_pairs = [tuple(sorted((payer_id, user_id))) for user_id in participant_user_ids]
+        user_balance_pairs = [tuple(sorted((payer_id, user_id))) for user_id in participant_user_ids if payer_id != user_id]
 
-        initiator_ids = [data[0] for data in user_balance_pairs]
-        participant_ids = [data[1] for data in user_balance_pairs]
+        conditions = Q()
+        for initiator_id, participant_id in user_balance_pairs:
+            conditions |= Q(initiator_id=initiator_id, participant_id=participant_id)
 
-        existing_balances = {
-            (balance.initiator.id, balance.participant.id): balance
-            for balance in UserBalance.objects.filter(
-                initiator_id__in=initiator_ids,
-                participant_id__in=participant_ids
-            )
-        }
+        if user_balance_pairs:
+            existing_balances = {
+                (balance.initiator_id, balance.participant_id): balance
+                for balance in UserBalance.objects.filter(conditions)
+            }
+        else:
+            existing_balances = {}
 
         factor = 1 if not reverse else -1
 
